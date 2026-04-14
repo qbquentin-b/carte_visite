@@ -17,14 +17,14 @@ export default function ScansPage() {
   const [scans, setScans] = useState<Scan[]>([])
   const [loading, setLoading] = useState(true)
   const [scanSlug, setScanSlug] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionMessage, setActionMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
 
   const supabase = createClient()
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchScans()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchScans = async () => {
@@ -54,63 +54,34 @@ export default function ScansPage() {
     setActionMessage(null)
 
     if (!scanSlug.trim()) return
+    setIsSubmitting(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!tenant) return
-
-    // 1. Find the pass by slug
-    const { data: pass, error: passError } = await supabase
-      .from('passes')
-      .select('id, points, tenant_id')
-      .eq('pass_slug', scanSlug.trim())
-      .single()
-
-    if (passError || !pass) {
-      setActionMessage({ type: 'error', text: 'Pass introuvable avec ce slug.' })
-      return
-    }
-
-    if (pass.tenant_id !== tenant.id) {
-       setActionMessage({ type: 'error', text: 'Ce pass n\'appartient pas à votre commerce.' })
-       return
-    }
-
-    // 2. Add a point
-    const newPoints = pass.points + 1
-    const { error: updateError } = await supabase
-      .from('passes')
-      .update({ points: newPoints })
-      .eq('id', pass.id)
-
-    if (updateError) {
-      setActionMessage({ type: 'error', text: 'Erreur lors de la mise à jour des points.' })
-      return
-    }
-
-    // 3. Record the scan
-    await supabase
-      .from('scans')
-      .insert([
-        {
-          tenant_id: tenant.id,
-          pass_id: pass.id,
+    try {
+      const response = await fetch('/api/scans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pass_slug: scanSlug.trim(),
           action_type: 'point_added',
           device_info: 'Manual Entry (Dashboard)'
-        }
-      ])
+        }),
+      })
 
-    setActionMessage({ type: 'success', text: `Point ajouté avec succès ! Total : ${newPoints} points.` })
-    setScanSlug('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    fetchScans()
+      if (response.ok) {
+        const { newPoints } = await response.json()
+        setActionMessage({ type: 'success', text: `Point ajouté avec succès ! Total : ${newPoints} points.` })
+        setScanSlug('')
+        fetchScans()
+      } else {
+        const errorData = await response.json()
+        setActionMessage({ type: 'error', text: errorData.error || 'Erreur lors du scan' })
+      }
+    } catch {
+      setActionMessage({ type: 'error', text: 'Erreur réseau' })
+    }
+    setIsSubmitting(false)
   }
 
   return (
@@ -140,9 +111,10 @@ export default function ScansPage() {
           </div>
           <button
             type="submit"
-            className="mt-3 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            disabled={isSubmitting}
+            className="mt-3 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
           >
-            Ajouter un point
+            {isSubmitting ? 'Ajout...' : 'Ajouter un point'}
           </button>
         </form>
         {actionMessage && (
