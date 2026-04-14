@@ -17,12 +17,12 @@ export default function CardsPage() {
   const [type, setType] = useState('loyalty')
   const [bgColor, setBgColor] = useState('#000000')
   const [textColor, setTextColor] = useState('#ffffff')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchCards()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchCards = async () => {
@@ -49,9 +49,13 @@ export default function CardsPage() {
 
   const handleCreateCard = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setIsSubmitting(false)
+      return
+    }
 
     const { data: tenant } = await supabase
       .from('tenants')
@@ -59,7 +63,10 @@ export default function CardsPage() {
       .eq('user_id', user.id)
       .single()
 
-    if (!tenant) return
+    if (!tenant) {
+      setIsSubmitting(false)
+      return
+    }
 
     const designConfig = { bgColor, textColor }
 
@@ -79,11 +86,11 @@ export default function CardsPage() {
       setType('loyalty')
       setBgColor('#000000')
       setTextColor('#ffffff')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
       fetchCards()
     } else {
       alert('Erreur lors de la création de la carte')
     }
+    setIsSubmitting(false)
   }
 
   return (
@@ -154,9 +161,10 @@ export default function CardsPage() {
           <div>
             <button
               type="submit"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isSubmitting}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              Créer la carte
+              {isSubmitting ? 'Création...' : 'Créer la carte'}
             </button>
           </div>
         </form>
