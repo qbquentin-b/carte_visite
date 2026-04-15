@@ -51,43 +51,32 @@ export default function CardsPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setIsSubmitting(false)
-      return
-    }
-
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!tenant) {
-      setIsSubmitting(false)
-      return
-    }
-
     const designConfig = { bgColor, textColor }
 
-    const { error } = await supabase
-      .from('cards')
-      .insert([
-        {
-          tenant_id: tenant.id,
+    try {
+      const response = await fetch('/api/cards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           title,
           type,
           design_config: designConfig
-        }
-      ])
+        }),
+      })
 
-    if (!error) {
-      setTitle('')
-      setType('loyalty')
-      setBgColor('#000000')
-      setTextColor('#ffffff')
-      fetchCards()
-    } else {
+      if (response.ok) {
+        setTitle('')
+        setType('loyalty')
+        setBgColor('#000000')
+        setTextColor('#ffffff')
+        fetchCards()
+      } else {
+        const errorData = await response.json()
+        alert(`Erreur: ${errorData.error || 'Création échouée'}`)
+      }
+    } catch {
       alert('Erreur lors de la création de la carte')
     }
     setIsSubmitting(false)
@@ -194,7 +183,7 @@ export default function CardsPage() {
                   <div className="ml-5 flex-shrink-0">
                      <div
                         className="h-8 w-12 rounded border border-gray-200 flex items-center justify-center text-xs"
-                        style={{ backgroundColor: card.design_config.bgColor, color: card.design_config.textColor }}
+                        style={{ backgroundColor: card.design_config?.bgColor || '#000', color: card.design_config?.textColor || '#fff' }}
                       >
                         A
                       </div>

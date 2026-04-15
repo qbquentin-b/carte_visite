@@ -22,6 +22,7 @@ export default function PassesPage() {
   const [passes, setPasses] = useState<Pass[]>([])
   const [cards, setCards] = useState<Card[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form state
   const [customerName, setCustomerName] = useState('')
@@ -31,9 +32,8 @@ export default function PassesPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     fetchData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchData = async () => {
@@ -55,7 +55,9 @@ export default function PassesPage() {
 
       if (cardsData) {
         setCards(cardsData)
-        if (cardsData.length > 0) setSelectedCardId(cardsData[0].id)
+        if (cardsData.length > 0 && !selectedCardId) {
+          setSelectedCardId(cardsData[0].id)
+        }
       }
 
       // Fetch passes
@@ -72,41 +74,38 @@ export default function PassesPage() {
 
   const handleCreatePass = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!tenant || !selectedCardId) return
+    if (!selectedCardId) return
+    setIsSubmitting(true)
 
     // Generate a simple unique slug for the pass
     const passSlug = Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
 
-    const { error } = await supabase
-      .from('passes')
-      .insert([
-        {
-          tenant_id: tenant.id,
+    try {
+      const response = await fetch('/api/passes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           card_id: selectedCardId,
           customer_name: customerName,
           customer_email: customerEmail,
           pass_slug: passSlug
-        }
-      ])
+        }),
+      })
 
-    if (!error) {
-      setCustomerName('')
-      setCustomerEmail('')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-      fetchData()
-    } else {
+      if (response.ok) {
+        setCustomerName('')
+        setCustomerEmail('')
+        fetchData()
+      } else {
+        const errorData = await response.json()
+        alert(`Erreur: ${errorData.error || 'Création échouée'}`)
+      }
+    } catch {
       alert('Erreur lors de la génération du pass')
     }
+    setIsSubmitting(false)
   }
 
   return (
@@ -153,6 +152,7 @@ export default function PassesPage() {
                   value={selectedCardId}
                   onChange={(e) => setSelectedCardId(e.target.value)}
                 >
+                  <option value="" disabled>Sélectionner un modèle</option>
                   {cards.map(card => (
                     <option key={card.id} value={card.id}>{card.title}</option>
                   ))}
@@ -162,9 +162,10 @@ export default function PassesPage() {
             <div>
               <button
                 type="submit"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={isSubmitting}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                Générer le pass
+                {isSubmitting ? 'Génération...' : 'Générer le pass'}
               </button>
             </div>
           </form>
